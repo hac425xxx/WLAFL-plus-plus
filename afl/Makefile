@@ -1,2 +1,2 @@
 all:
-	gcc -g -I include/ src/afl-fuzz-misc.c src/afl-fuzz-extras.c src/afl-fuzz-queue.c src/afl-fuzz-one.c src/afl-fuzz-stats.c src/afl-fuzz-init.c src/afl-fuzz.c src/afl-fuzz-bitmap.c src/afl-fuzz-run.c src/afl-fuzz-globals.c src/afl-common.c src/afl-sharedmem.c src/afl-forkserver.c -o afl-fuzz  -ldl -w
+	$(CC) -g -I include/ src/afl-fuzz-misc.c src/afl-fuzz-extras.c src/afl-fuzz-queue.c src/afl-fuzz-one.c src/afl-fuzz-stats.c src/afl-fuzz-init.c src/afl-fuzz.c src/afl-fuzz-bitmap.c src/afl-fuzz-run.c src/afl-fuzz-globals.c src/afl-common.c src/afl-sharedmem.c src/afl-forkserver.c -o afl-fuzz  -ldl -w

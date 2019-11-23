@@ -24,6 +24,8 @@
  */
 
 #include "afl-fuzz.h"
+#include <signal.h>
+
 
 static u8 *get_libradamsa_path(u8 *own_loc)
 {
@@ -132,7 +134,6 @@ static void usage(u8 *argv0)
       argv0, EXEC_TIMEOUT, MEM_LIMIT, doc_path);
 
   exit(1);
-#undef PHYTON_SUPPORT
 }
 
 #ifndef AFL_LIB
@@ -757,6 +758,20 @@ int main(int argc, char **argv)
   if (getenv("AFL_LD_PRELOAD"))
     FATAL("Use AFL_PRELOAD instead of AFL_LD_PRELOAD");
 
+
+  char tmp[40] = {0};
+  snprintf(tmp, 40, "%d", getpid());
+  setenv("WLAFL_FUZZ_ID", tmp, 1);
+
+
+  char cmd[400] = {0};
+  snprintf(cmd, 400, "export WLAFL_FUZZ_ID=%d", getpid());
+  system(cmd);
+
+  setup_shm(dumb_mode);
+
+  printf("set id:%s\n", tmp);
+
   save_cmdline(argc, argv);
 
   fix_up_banner(argv[optind]);
@@ -807,7 +822,7 @@ int main(int argc, char **argv)
 
   setup_post();
   setup_custom_mutator();
-  setup_shm(dumb_mode);
+
 
   if (!in_bitmap)
     memset(virgin_bits, 255, MAP_SIZE);
@@ -817,14 +832,6 @@ int main(int argc, char **argv)
   init_count_class16();
 
   setup_dirs_fds();
-
-#ifdef USE_PYTHON
-  if (init_py())
-    FATAL("Failed to initialize Python module");
-#else
-  if (getenv("AFL_PYTHON_MODULE"))
-    FATAL("Your AFL binary was built without Python support");
-#endif
 
   setup_cmdline_file(argv + optind);
 
@@ -874,6 +881,13 @@ int main(int argc, char **argv)
 
   if (!out_file)
     setup_stdio_file();
+
+
+  if(getenv("INSTRUMENT_ARGS"))
+  {
+    snprintf(instrument_arguments,sizeof(instrument_arguments), "%s", getenv("INSTRUMENT_ARGS"));
+    printf("Get INSTRUMENT_ARGS:%s\n", instrument_arguments);
+  }
 
   use_argv = argv + optind;
 

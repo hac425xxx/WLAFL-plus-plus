@@ -25,6 +25,10 @@
 
 #include "afl-fuzz.h"
 
+
+char SHM_ID[255] = {0};
+char instrument_arguments[0x200];
+
 /* MOpt:
    Lots of globals, but mostly for the status UI and other things where it
    really makes no sense to haul them around as function parameters. */
@@ -136,7 +140,7 @@ s32 out_fd,                             /* Persistent fd for out_file       */
     fsrv_ctl_fd,                        /* Fork server control pipe (write) */
     fsrv_st_fd;                         /* Fork server status pipe (read)   */
 
-s32 forksrv_pid,                        /* PID of the fork server           */
+s32 forksrv_pid = -1,                        /* PID of the fork server           */
     child_pid = -1,                     /* PID of the fuzzed program        */
     out_dir_fd = -1;                    /* FD of the lock file              */
 

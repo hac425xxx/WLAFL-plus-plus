@@ -28,6 +28,8 @@
 extern int write_pipe;
 extern int read_pipe;
 
+extern char *read_pipe_path;
+extern char *write_pipe_path;
 
 int ReadCommandFromPipe()
 {
@@ -53,7 +55,7 @@ void WriteCommandToPipe(int cmd)
 #else
   if (write(write_pipe, &cmd, sizeof(cmd)) != sizeof(cmd))
   {
-    printf("WriteCommandToPipe failed.\n");
+    printf("afl-fuzz: WriteCommandToPipe failed.\n");
     exit(1);
   }
 
@@ -71,6 +73,7 @@ u8 run_target(char **argv, u32 timeout)
 
   int status = 0;
   u32 tb4;
+  int ret = FAULT_NONE;
 
   child_timed_out = 0;
 
@@ -92,14 +95,18 @@ u8 run_target(char **argv, u32 timeout)
     exit(1);
   }
 
-  // printf("afl-fuzz recv CMD_WAIT_REQUEST and write CMD_START_FUZZ to instrument\n");
+  // printf("afl-fuzz: recv CMD_WAIT_REQUEST and write CMD_START_FUZZ to instrument\n");
 
   // 写命令 让插桩开始一次fuzz
   WriteCommandToPipe(CMD_START_FUZZ);
 
-  // printf("wait process finish\n");
+  // printf("afl-fuzz: wait process finish\n");
   cmd = ReadCommandFromPipe();
-
+  if(cmd == -1)
+  {
+    printf("afl-fuzz: wait process finish failed\n");
+    exit(0);
+  }
 
   ++total_execs;
 
@@ -111,19 +118,33 @@ u8 run_target(char **argv, u32 timeout)
   classify_counts((u32 *)trace_bits);
 #endif /* ^WORD_SIZE_64 */
 
-  prev_timed_out = child_timed_out;
-
+  // printf("process finish with status %d\n", cmd);
   switch (cmd)
   {
   case CMD_PROCESS_CRASH:
-    create_process(argv);
-    return FAULT_CRASH;
+    ret = FAULT_CRASH;
+    break;
   case CMD_PROCESS_TIMEOUT:
-    create_process(argv);
-    return FAULT_TMOUT;
+    ret = FAULT_TMOUT;
+    break;
   default:
-    return FAULT_NONE;
+    ret = FAULT_NONE;
+    break;
   }
+
+  if (ret != FAULT_NONE)
+  {
+    // printf("kill process:%d\n", forksrv_pid);
+    kill_process(forksrv_pid);
+    wait(&forksrv_pid);
+
+    close(write_pipe);
+    close(read_pipe);
+
+    create_process(argv);
+  }
+
+  return ret;
 }
 
 /* Write modified data to file for testing. If out_file is set, the old file

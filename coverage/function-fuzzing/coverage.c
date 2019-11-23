@@ -9,6 +9,11 @@
 #include "drwrap.h"
 
 #include "drsyms.h"
+
+#ifdef __ANDROID__
+#include "../../afl/include/android-ashmem.h"
+#endif
+
 #include "../../afl/include/config.h"
 
 #include "drtable.h"
@@ -68,8 +73,8 @@ typedef struct _winafl_option_t
     char logdir[MAXIMUM_PATH];
     char fuzz_module[MAXIMUM_PATH];
     char fuzz_method[MAXIMUM_PATH];
-    char pipe_name[MAXIMUM_PATH];
-    char shm_name[MAXIMUM_PATH];
+    char fuzzer_id[MAXIMUM_PATH];
+    char shm_id[MAXIMUM_PATH];
     unsigned long fuzz_offset;
     int fuzz_iterations;
     void **func_args;
@@ -95,6 +100,8 @@ static int winafl_tls_field;
 typedef struct _fuzz_target_t
 {
     reg_t xsp; /* stack level at entry to the fuzz target */
+    reg_t xbp;
+    reg_t lr;
     app_pc func_pc;
     int iteration;
 } fuzz_target_t;
@@ -115,8 +122,13 @@ static int pipe_fd;
 int write_pipe;
 int read_pipe;
 
+#ifdef __ANDROID__
+char *read_pipe_path = "/data/local/tmp/wlafl_pipe_read";
+char *write_pipe_path = "/data/local/tmp/wlafl_pipe_write";
+#else
 char *read_pipe_path = "/tmp/wlafl_pipe_read";
 char *write_pipe_path = "/tmp/wlafl_pipe_write";
+#endif
 
 #endif
 
@@ -249,7 +261,13 @@ onexception(void *drcontext, dr_siginfo_t *siginfo)
             access_addr = siginfo->access_address;
         }
         dr_printf("exception pc: %p, access_addr:%p\n", siginfo->mcontext->pc, access_addr);
-        WriteCommandToPipe(CMD_PROCESS_CRASH);
+
+        if (!options.debug_mode)
+        {
+            WriteCommandToPipe(CMD_PROCESS_CRASH);
+        }
+        // close(read_pipe);
+        // close(write_pipe);
         dr_abort();
     }
 
@@ -318,7 +336,7 @@ instrument_edge_coverage(void *drcontext, void *tag, instrlist_t *bb, instr_t *i
     if (!should_instrument)
         return DR_EMIT_DEFAULT | DR_EMIT_PERSISTABLE;
 
-    offset = (uint)start_pc;
+    offset = (uint)(start_pc - target_module.base);
     offset &= MAP_SIZE - 1;
 
     dr_insert_clean_call(drcontext, bb, NULL, (void *)log_edge, true, 1, OPND_CREATE_INTPTR(offset));
@@ -381,43 +399,21 @@ pre_fuzz_handler(void *wrapcxt, INOUT void **user_data)
     dr_mcontext_t *mc = drwrap_get_mcontext_ex(wrapcxt, DR_MC_ALL);
     drcontext = drwrap_get_drcontext(wrapcxt);
 
+#if defined(AARCH64)
     fuzz_target.xsp = mc->xsp;
+    fuzz_target.xbp = mc->r29;
+    fuzz_target.lr = mc->lr;
     fuzz_target.func_pc = target_to_fuzz;
+#else
+    fuzz_target.xsp = mc->xsp;
+    fuzz_target.xbp = mc->xbp;
+    fuzz_target.func_pc = target_to_fuzz;
+#endif
+
 
     if (options.debug_mode)
     {
         dr_printf("In pre_fuzz_handler\n");
-        return;
-    }
-
-    // dr_printf("In pre_fuzz_handler\n");
-    command = ReadCommandFromPipe();
-
-    if (command == CMD_QUERY)
-    {
-
-        // dr_printf("Instrument: Recv CMD_QUERY, now write CMD_WAIT_REQUEST to afl-fuzz\n");
-        WriteCommandToPipe(CMD_WAIT_REQUEST); // 通知 afl-fuzz 程序可以开始 fuzzing
-
-        //等待接收开始 fuzzing 的命令
-        command = ReadCommandFromPipe();
-
-        if (command != CMD_START_FUZZ)
-        {
-            if (command == CMD_STOP_FUZZ) // 0xff 表示退出
-            {
-                dr_abort();
-            }
-            else
-            {
-                DR_ASSERT_MSG(false, "Instrument: unrecognized command received over pipe");
-            }
-        }
-    }
-    else
-    {
-        dr_printf("Instrument: Wait CMD_QUERY failded\n");
-        dr_abort();
     }
 
     //save or restore arguments
@@ -443,6 +439,41 @@ pre_fuzz_handler(void *wrapcxt, INOUT void **user_data)
         thread_data[0] = 0;
         thread_data[1] = winafl_data.afl_area;
     }
+
+    if (options.debug_mode)
+    {
+        return;
+    }
+
+
+    command = ReadCommandFromPipe();
+
+    if (command == CMD_QUERY)
+    {
+
+        // dr_printf("Instrument: Recv CMD_QUERY, now write CMD_WAIT_REQUEST to afl-fuzz\n");
+        WriteCommandToPipe(CMD_WAIT_REQUEST); // 通知 afl-fuzz 程序可以开始 fuzzing
+
+        //等待接收开始 fuzzing 的命令
+        command = ReadCommandFromPipe();
+        if (command != CMD_START_FUZZ)
+        {
+            if (command == CMD_STOP_FUZZ) // 0xff 表示退出
+            {
+                dr_abort();
+            }
+            else
+            {
+                dr_printf("Instrument: unrecognized command received over pipe");
+                dr_abort();
+            }
+        }
+    }
+    else
+    {
+        dr_printf("Instrument: Wait CMD_QUERY failded\n");
+        dr_abort();
+    }
 }
 
 static void
@@ -459,6 +490,8 @@ post_fuzz_handler(void *wrapcxt, void *user_data)
         dr_printf("In post_fuzz_handler\n");
     }
 
+    // dr_printf("In post_fuzz_handler\n");
+
     /* We don't need to reload context in case of network-based fuzzing. */
     if (options.no_loop)
         return;
@@ -468,9 +501,17 @@ post_fuzz_handler(void *wrapcxt, void *user_data)
     {
         dr_abort();
     }
-
+#if defined(AARCH64)
     mc->xsp = fuzz_target.xsp;
+    mc->r29 = fuzz_target.xbp;
+    mc->lr = fuzz_target.lr;
     mc->pc = fuzz_target.func_pc;
+#else
+    mc->xsp = fuzz_target.xsp;
+    mc->xbp = fuzz_target.xbp;
+    mc->pc = fuzz_target.func_pc;
+#endif
+
     drwrap_redirect_execution(wrapcxt);
 }
 
@@ -487,7 +528,7 @@ event_module_load(void *drcontext, const module_data_t *info, bool loaded)
     char *module_name = (char *)dr_module_preferred_name(info);
 
     if (options.debug_mode)
-        dr_fprintf(winafl_data.log, "Module loaded, %s\n", module_name);
+        dr_fprintf(winafl_data.log, "Module loaded: %s\t%p----%p\n", module_name, info->start, info->end);
 
     if (strstr(module_name, target_module.name) != NULL)
     {
@@ -554,8 +595,15 @@ setup_pipe()
         DR_ASSERT_MSG(false, "error connecting to pipe");
 #else
     dr_printf("open pipe\n");
-    write_pipe = open(read_pipe_path, O_WRONLY);
-    read_pipe = open(write_pipe_path, O_RDONLY);
+    char tmp[1000] = {0};
+
+    snprintf(tmp, 1000, "%s_%s", read_pipe_path, options.fuzzer_id);
+    puts(tmp);
+    write_pipe = open(tmp, O_WRONLY);
+
+    snprintf(tmp, 1000, "%s_%s", write_pipe_path, options.fuzzer_id);
+    puts(tmp);
+    read_pipe = open(tmp, O_RDONLY);
 #endif
 }
 
@@ -583,14 +631,8 @@ setup_shmem()
     if (winafl_data.afl_area == NULL)
         DR_ASSERT_MSG(false, "error accesing shared memory");
 #else
-    char *shmenv;
     int32_t shm_id = -1;
-    if ((shmenv = getenv(SHM_ENV_VAR)) == NULL)
-    {
-        dr_printf("AFL environment variable " SHM_ENV_VAR " not set");
-        dr_abort();
-    }
-    if ((shm_id = atoi(shmenv)) < 0)
+    if ((shm_id = atoi(options.shm_id)) < 0)
     {
         dr_printf("invalid " SHM_ENV_VAR " contents");
         dr_abort();
@@ -624,9 +666,6 @@ options_init(client_id_t id, int argc, const char *argv[])
     options.callconv = DRWRAP_CALLCONV_DEFAULT;
     options.dr_persist_cache = false;
 
-    strcpy(options.pipe_name, "\\\\.\\pipe\\afl_pipe_default");
-    strcpy(options.shm_name, "afl_shm_default");
-
     for (i = 1 /*skip client*/; i < argc; i++)
     {
 
@@ -642,13 +681,14 @@ options_init(client_id_t id, int argc, const char *argv[])
             options.thread_coverage = true;
         else if (strcmp(token, "-debug") == 0)
             options.debug_mode = true;
+        else if (strcmp(token, "-shm_id") == 0)
+        {
+            strcpy(options.shm_id, argv[i + 1]);
+            i++;
+        }
         else if (strcmp(token, "-fuzzer_id") == 0)
         {
-            USAGE_CHECK((i + 1) < argc, "missing fuzzer id");
-            strcpy(options.pipe_name, "\\\\.\\pipe\\afl_pipe_");
-            strcpy(options.shm_name, "afl_shm_");
-            strcat(options.pipe_name, argv[i + 1]);
-            strcat(options.shm_name, argv[i + 1]);
+            strcpy(options.fuzzer_id, argv[i + 1]);
             i++;
         }
         else if (strcmp(token, "-coverage_module") == 0)

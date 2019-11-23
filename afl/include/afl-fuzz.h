@@ -456,6 +456,8 @@ extern u32 extras_cnt;            /* Total number of tokens read      */
 extern struct extra_data *a_extras; /* Automatically selected extras    */
 extern u32 a_extras_cnt;            /* Total number of tokens available */
 
+extern char instrument_arguments[0x200];
+
 u8 *(*post_handler)(u8 *buf, u32 *len);
 
 /* hooks for the custom mutator function */
@@ -738,3 +740,4 @@ extern u32 document_counter;
 
 int ReadCommandFromPipe();
 void WriteCommandToPipe(int cmd);
+void kill_process(int pid);
