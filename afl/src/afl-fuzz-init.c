@@ -536,69 +536,6 @@ void perform_dry_run(char** argv) {
 
         }
 
-        if (mem_limit) {
-
-          SAYF("\n" cLRD "[-] " cRST
-               "Oops, the program crashed with one of the test cases provided. "
-               "There are\n"
-               "    several possible explanations:\n\n"
-
-               "    - The test case causes known crashes under normal working "
-               "conditions. If\n"
-               "      so, please remove it. The fuzzer should be seeded with "
-               "interesting\n"
-               "      inputs - but not ones that cause an outright crash.\n\n"
-
-               "    - The current memory limit (%s) is too low for this "
-               "program, causing\n"
-               "      it to die due to OOM when parsing valid files. To fix "
-               "this, try\n"
-               "      bumping it up with the -m setting in the command line. "
-               "If in doubt,\n"
-               "      try something along the lines of:\n\n"
-
-               MSG_ULIMIT_USAGE
-               " /path/to/binary [...] <testcase )\n\n"
-
-               "      Tip: you can use http://jwilk.net/software/recidivm to "
-               "quickly\n"
-               "      estimate the required amount of virtual memory for the "
-               "binary. Also,\n"
-               "      if you are using ASAN, see %s/notes_for_asan.txt.\n\n"
-
-               MSG_FORK_ON_APPLE
-
-               "    - Least likely, there is a horrible bug in the fuzzer. If "
-               "other options\n"
-               "      fail, poke <afl-users@googlegroups.com> for "
-               "troubleshooting tips.\n",
-               DMS(mem_limit << 20), mem_limit - 1, doc_path);
-
-        } else {
-
-          SAYF("\n" cLRD "[-] " cRST
-               "Oops, the program crashed with one of the test cases provided. "
-               "There are\n"
-               "    several possible explanations:\n\n"
-
-               "    - The test case causes known crashes under normal working "
-               "conditions. If\n"
-               "      so, please remove it. The fuzzer should be seeded with "
-               "interesting\n"
-               "      inputs - but not ones that cause an outright crash.\n\n"
-
-               MSG_FORK_ON_APPLE
-
-               "    - Least likely, there is a horrible bug in the fuzzer. If "
-               "other options\n"
-               "      fail, poke <afl-users@googlegroups.com> for "
-               "troubleshooting tips.\n");
-
-        }
-
-#undef MSG_ULIMIT_USAGE
-#undef MSG_FORK_ON_APPLE
-
         FATAL("Test case '%s' results in a crash", fn);
 
       case FAULT_ERROR:

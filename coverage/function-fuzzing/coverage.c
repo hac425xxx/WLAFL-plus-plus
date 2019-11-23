@@ -410,7 +410,6 @@ pre_fuzz_handler(void *wrapcxt, INOUT void **user_data)
     fuzz_target.func_pc = target_to_fuzz;
 #endif
 
-
     if (options.debug_mode)
     {
         dr_printf("In pre_fuzz_handler\n");
@@ -431,48 +430,43 @@ pre_fuzz_handler(void *wrapcxt, INOUT void **user_data)
         }
     }
 
-    memset(winafl_data.afl_area, 0, MAP_SIZE);
+    if (!options.debug_mode)
+    {
+        command = ReadCommandFromPipe();
 
+        if (command == CMD_QUERY)
+        {
+
+            // dr_printf("Instrument: Recv CMD_QUERY, now write CMD_WAIT_REQUEST to afl-fuzz\n");
+            WriteCommandToPipe(CMD_WAIT_REQUEST); // 通知 afl-fuzz 程序可以开始 fuzzing
+
+            //等待接收开始 fuzzing 的命令
+            command = ReadCommandFromPipe();
+            if (command != CMD_START_FUZZ)
+            {
+                if (command == CMD_STOP_FUZZ) // 0xff 表示退出
+                {
+                    dr_abort();
+                }
+                else
+                {
+                    dr_printf("Instrument: unrecognized command received over pipe");
+                    dr_abort();
+                }
+            }
+        }
+        else
+        {
+            dr_printf("Instrument: Wait CMD_QUERY failded\n");
+            dr_abort();
+        }
+    }
+    memset(winafl_data.afl_area, 0, MAP_SIZE);
     if (options.thread_coverage)
     {
         void **thread_data = (void **)drmgr_get_tls_field(drcontext, winafl_tls_field);
         thread_data[0] = 0;
         thread_data[1] = winafl_data.afl_area;
-    }
-
-    if (options.debug_mode)
-    {
-        return;
-    }
-
-
-    command = ReadCommandFromPipe();
-
-    if (command == CMD_QUERY)
-    {
-
-        // dr_printf("Instrument: Recv CMD_QUERY, now write CMD_WAIT_REQUEST to afl-fuzz\n");
-        WriteCommandToPipe(CMD_WAIT_REQUEST); // 通知 afl-fuzz 程序可以开始 fuzzing
-
-        //等待接收开始 fuzzing 的命令
-        command = ReadCommandFromPipe();
-        if (command != CMD_START_FUZZ)
-        {
-            if (command == CMD_STOP_FUZZ) // 0xff 表示退出
-            {
-                dr_abort();
-            }
-            else
-            {
-                dr_printf("Instrument: unrecognized command received over pipe");
-                dr_abort();
-            }
-        }
-    }
-    else
-    {
-        dr_printf("Instrument: Wait CMD_QUERY failded\n");
-        dr_abort();
     }
 }
 
