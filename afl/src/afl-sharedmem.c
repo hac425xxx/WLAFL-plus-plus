@@ -99,7 +99,7 @@ void remove_shm(void)
 
 /* Configure shared memory. */
 
-void setup_shm(unsigned char dumb_mode)
+void setup_shm()
 {
 
   u8 *shm_str;

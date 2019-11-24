@@ -276,41 +276,23 @@ onexception(void *drcontext, dr_siginfo_t *siginfo)
 
 #endif
 
-static void event_thread_init(void *drcontext)
-{
-    void **thread_data;
-
-    thread_data = (void **)dr_thread_alloc(drcontext, 2 * sizeof(void *));
-    thread_data[0] = 0;
-    if (options.thread_coverage)
-    {
-        thread_data[1] = winafl_data.fake_afl_area;
-    }
-    else
-    {
-        thread_data[1] = winafl_data.afl_area;
-    }
-    drmgr_set_tls_field(drcontext, winafl_tls_field, thread_data);
-}
-
-static void event_thread_exit(void *drcontext)
-{
-    void *data = drmgr_get_tls_field(drcontext, winafl_tls_field);
-    dr_thread_free(drcontext, data, 2 * sizeof(void *));
-}
-
 unsigned long pre_offset = 0;
 
 static void
 log_edge(unsigned long offset)
 {
-    if (options.debug_mode)
-    {
-        dr_printf("offset:%p\n", offset);
-    }
+
     unsigned long id = offset ^ pre_offset;
     id &= MAP_SIZE - 1;
     winafl_data.afl_area[id]++;
+
+    if (options.debug_mode)
+    {
+        dr_printf("offset:%p\n", offset);
+        dr_printf("pre_offset:%p\n", pre_offset);
+        dr_printf("id:%p\n", id);
+    }
+
     pre_offset = offset >> 1;
 }
 
@@ -320,7 +302,7 @@ instrument_edge_coverage(void *drcontext, void *tag, instrlist_t *bb, instr_t *i
 {
     static bool debug_information_output = false;
     app_pc start_pc;
-    uint offset;
+    unsigned long offset;
     bool should_instrument = false;
 
     if (!drmgr_is_first_instr(drcontext, inst))
@@ -336,8 +318,7 @@ instrument_edge_coverage(void *drcontext, void *tag, instrlist_t *bb, instr_t *i
     if (!should_instrument)
         return DR_EMIT_DEFAULT | DR_EMIT_PERSISTABLE;
 
-    offset = (uint)(start_pc - target_module.base);
-    offset &= MAP_SIZE - 1;
+    offset = (unsigned long)(start_pc - target_module.base);
 
     dr_insert_clean_call(drcontext, bb, NULL, (void *)log_edge, true, 1, OPND_CREATE_INTPTR(offset));
 
@@ -379,13 +360,6 @@ pre_loop_start_handler(void *wrapcxt, INOUT void **user_data)
     }
 
     memset(winafl_data.afl_area, 0, MAP_SIZE);
-
-    if (options.thread_coverage)
-    {
-        void **thread_data = (void **)drmgr_get_tls_field(drcontext, winafl_tls_field);
-        thread_data[0] = 0;
-        thread_data[1] = winafl_data.afl_area;
-    }
 }
 
 static void
@@ -462,12 +436,6 @@ pre_fuzz_handler(void *wrapcxt, INOUT void **user_data)
         }
     }
     memset(winafl_data.afl_area, 0, MAP_SIZE);
-    if (options.thread_coverage)
-    {
-        void **thread_data = (void **)drmgr_get_tls_field(drcontext, winafl_tls_field);
-        thread_data[0] = 0;
-        thread_data[1] = winafl_data.afl_area;
-    }
 }
 
 static void
@@ -649,7 +617,6 @@ options_init(client_id_t id, int argc, const char *argv[])
     options.persistence_mode = native_mode;
     options.nudge_kills = true;
     options.debug_mode = false;
-    options.thread_coverage = false;
     options.fuzz_module[0] = 0;
     options.fuzz_method[0] = 0;
     options.fuzz_offset = 0;
@@ -671,8 +638,6 @@ options_init(client_id_t id, int argc, const char *argv[])
             options.nudge_kills = false;
         else if (strcmp(token, "-nudge_kills") == 0)
             options.nudge_kills = true;
-        else if (strcmp(token, "-thread_coverage") == 0)
-            options.thread_coverage = true;
         else if (strcmp(token, "-debug") == 0)
             options.debug_mode = true;
         else if (strcmp(token, "-shm_id") == 0)
@@ -721,7 +686,11 @@ options_init(client_id_t id, int argc, const char *argv[])
             else if (strcmp(argv[i], "ms64") == 0)
                 options.callconv = DRWRAP_CALLCONV_MICROSOFT_X64;
             else
-                NOTIFY(0, "Unknown calling convention, using default value instead.\n");
+            {
+                dr_printf("Unknown calling convention, using default value instead.\n");
+                dr_abort();
+            }
+                
         }
         else if (strcmp(token, "-no_loop") == 0)
         {
@@ -806,17 +775,6 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     else
     {
         winafl_data.afl_area = (unsigned char *)dr_global_alloc(MAP_SIZE);
-    }
-
-    if (options.thread_coverage || options.dr_persist_cache)
-    {
-        winafl_tls_field = drmgr_register_tls_field();
-        if (winafl_tls_field == -1)
-        {
-            DR_ASSERT_MSG(false, "error reserving TLS field");
-        }
-        drmgr_register_thread_init_event(event_thread_init);
-        drmgr_register_thread_exit_event(event_thread_exit);
     }
 
     event_init();

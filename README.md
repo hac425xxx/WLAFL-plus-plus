@@ -22,5 +22,5 @@ CFLAGS=" -DAARCH64 -fPIE -pie " cmake .. -DDynamoRIO_DIR=/home/hac425/workspace/
 ```
 export DYRUN_PATH=/data/lsl/DynamoRIO-Linux-7.90.18003-0/bin64/drrun
 export INSTRUMENT_ARGS="-nargs 2 -target_module demo -target_offset 0xb28 -coverage_module demo"
-
+./afl-fuzz -i q -o xew/ -- ../demo @@
 ```

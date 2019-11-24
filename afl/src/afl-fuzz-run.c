@@ -305,6 +305,12 @@ u8 calibrate_case(char **argv, struct queue_entry *q, u8 *use_mem, u32 handicap,
 
     fault = run_target(argv, use_tmout);
 
+    // 第一次执行不统计
+    if(total_execs == 1)
+    {
+      stage_cur = 0;
+      continue;
+    }
     /* stop_soon is set by the handler for Ctrl+C. When it's pressed,
        we want to bail out quickly. */
 

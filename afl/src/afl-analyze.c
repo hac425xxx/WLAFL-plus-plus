@@ -955,7 +955,7 @@ int main(int argc, char** argv) {
 
   use_hex_offsets = !!getenv("AFL_ANALYZE_HEX");
 
-  setup_shm(0);
+  setup_shm();
   atexit(at_exit_handler);
   setup_signal_handlers();
 

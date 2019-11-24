@@ -675,28 +675,11 @@ int main(int argc, char **argv)
 
     tmp_dir = out_dir;
 
-  if (dumb_mode)
-  {
-
-    if (crash_mode)
-      FATAL("-C and -n are mutually exclusive");
-    if (qemu_mode)
-      FATAL("-Q and -n are mutually exclusive");
-    if (unicorn_mode)
-      FATAL("-U and -n are mutually exclusive");
-  }
-
   if (getenv("AFL_DISABLE_TRIM"))
     disable_trim = 1;
 
   if (getenv("AFL_NO_UI") && getenv("AFL_FORCE_UI"))
     FATAL("AFL_NO_UI and AFL_FORCE_UI are mutually exclusive");
-
-  if (strchr(argv[optind], '/') == NULL && !unicorn_mode)
-    WARNF(cLRD
-          "Target binary called without a prefixed path, make sure you are "
-          "fuzzing the right binary: " cRST "%s",
-          argv[optind]);
 
   ACTF("Getting to work...");
 
@@ -745,9 +728,6 @@ int main(int argc, char **argv)
       FATAL("Invalid value of AFL_HANG_TMOUT");
   }
 
-  if (dumb_mode == 2 && no_forkserver)
-    FATAL("AFL_DUMB_FORKSRV and AFL_NO_FORKSRV are mutually exclusive");
-
   if (getenv("AFL_PRELOAD"))
   {
 
@@ -758,19 +738,7 @@ int main(int argc, char **argv)
   if (getenv("AFL_LD_PRELOAD"))
     FATAL("Use AFL_PRELOAD instead of AFL_LD_PRELOAD");
 
-
-  char tmp[40] = {0};
-  snprintf(tmp, 40, "%d", getpid());
-  setenv("WLAFL_FUZZ_ID", tmp, 1);
-
-
-  char cmd[400] = {0};
-  snprintf(cmd, 400, "export WLAFL_FUZZ_ID=%d", getpid());
-  system(cmd);
-
-  setup_shm(dumb_mode);
-
-  printf("set id:%s\n", tmp);
+  setup_shm();
 
   save_cmdline(argc, argv);
 
