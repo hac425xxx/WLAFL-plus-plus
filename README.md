@@ -19,8 +19,19 @@ CFLAGS=" -DAARCH64 -fPIE -pie " cmake .. -DDynamoRIO_DIR=/home/hac425/workspace/
 
 使用方式
 
+demo
+
 ```
 export DYRUN_PATH=/data/lsl/DynamoRIO-Linux-7.90.18003-0/bin64/drrun
 export INSTRUMENT_ARGS="-nargs 2 -target_module demo -target_offset 0xb28 -coverage_module demo"
 ./afl-fuzz -i q -o xew/ -- ../demo @@
+```
+
+whatsapp
+
+```
+export DYRUN_PATH=/data/local/tmp/DynamoRIO-Linux-7.90.18003-0/bin64/drrun
+export INSTRUMENT_ARGS="-target_module standalone -target_offset 0x788 -coverage_module libwhatsapp.so"
+
+./afl-fuzz -i in -o xxxadfad/ -- ../demo @@
 ```
