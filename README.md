@@ -30,8 +30,8 @@ export INSTRUMENT_ARGS="-nargs 2 -target_module demo -target_offset 0xb28 -cover
 whatsapp
 
 ```
+export LD_LIBRARY_PATH=/data/app/com.whatsapp--5pvwBQWl6Fvyjuvcrsugg==/lib/arm64/
 export DYRUN_PATH=/data/local/tmp/DynamoRIO-Linux-7.90.18003-0/bin64/drrun
 export INSTRUMENT_ARGS="-target_module standalone -target_offset 0x788 -coverage_module libwhatsapp.so"
-
-./afl-fuzz -i in -o xxxadfad/ -- ../demo @@
+./afl-fuzz -i mp4in -M master-app  -o whasapp-out -- ./standalone @@
 ```
