@@ -289,8 +289,6 @@ log_edge(unsigned long offset)
     if (options.debug_mode)
     {
         dr_printf("offset:%p\n", offset);
-        dr_printf("pre_offset:%p\n", pre_offset);
-        dr_printf("id:%p\n", id);
     }
 
     pre_offset = offset >> 1;
@@ -490,7 +488,7 @@ event_module_load(void *drcontext, const module_data_t *info, bool loaded)
     char *module_name = (char *)dr_module_preferred_name(info);
 
     if (options.debug_mode)
-        dr_fprintf(winafl_data.log, "Module loaded: %s\t%p----%p\n", module_name, info->start, info->end);
+        dr_printf("Module loaded: %s\t%p----%p\n", module_name, info->start, info->end);
 
     if (strstr(module_name, target_module.name) != NULL)
     {
@@ -559,12 +557,12 @@ setup_pipe()
     dr_printf("open pipe\n");
     char tmp[1000] = {0};
 
-    snprintf(tmp, 1000, "%s_%s", read_pipe_path, options.fuzzer_id);
-    puts(tmp);
+    dr_snprintf(tmp, 1000, "%s_%s", read_pipe_path, options.fuzzer_id);
+    dr_printf("%s\n",tmp);
     write_pipe = open(tmp, O_WRONLY);
 
-    snprintf(tmp, 1000, "%s_%s", write_pipe_path, options.fuzzer_id);
-    puts(tmp);
+    dr_snprintf(tmp, 1000, "%s_%s", write_pipe_path, options.fuzzer_id);
+    dr_printf("%s\n",tmp);
     read_pipe = open(tmp, O_RDONLY);
 #endif
 }
